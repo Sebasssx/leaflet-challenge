@@ -1,102 +1,58 @@
-var queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
+const earthquakeUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"; // Remote URL
 
-var query2 = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_week.geojson"
+let map = L.map("map").setView([0, 0], 2);
 
-d3.json(queryUrl, function(data) {
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: "© OpenStreetMap contributors"
+}).addTo(map);
 
-  createFeatures(data.features);
+function markerSize(magnitude) {
+  return magnitude * 4;
+}
+
+function markerColor(depth) {
+  return depth > 90 ? "red" :
+         depth > 70 ? "orange" :
+         depth > 50 ? "yellow" :
+         depth > 30 ? "green" :
+         depth > 10 ? "blue" : "purple";
+}
+
+d3.json(earthquakeUrl).then(data => {
+  data.features.forEach(feature => {
+    const [lon, lat, depth] = feature.geometry.coordinates;
+    const magnitude = feature.properties.mag;
+    const place = feature.properties.place;
+
+    L.circleMarker([lat, lon], {
+      radius: markerSize(magnitude),
+      color: markerColor(depth),
+      fillOpacity: 0.75
+    }).bindPopup(`<h3>${place}</h3><hr><p>Magnitude: ${magnitude}</p><p>Depth: ${depth} km</p>`).addTo(map);
+  });
 });
 
-function createFeatures(earthquakeData) {
+let legend = L.control({ position: "bottomright" });
 
-  function onEachFeature(feature, layer) {
-    layer.bindPopup("<h3>" + feature.properties.place +
-      "</h3><hr><p>" + new Date(feature.properties.time) + "</p>" +
-      "</h3><hr><p>Magnitude: " + feature.properties.mag + "</p>");
+legend.onAdd = function () {
+  let div = L.DomUtil.create("div", "info legend");
+  const grades = [-10, 10, 30, 50, 70, 90];
+  const colors = ["purple", "blue", "green", "yellow", "orange", "red"];
+
+  for (let i = 0; i < grades.length; i++) {
+    div.innerHTML +=
+      `<i style="background:${colors[i]}"></i> ` +
+      `${grades[i]}${grades[i + 1] ? "&ndash;" + grades[i + 1] + "<br>" : "+"}`;
   }
-
-  
-  var earthquakes = L.geoJSON(earthquakeData, {
-    onEachFeature: onEachFeature,
-    pointToLayer: function (feature, latlng) {
-      var color;
-      var r = 255;
-      var g = Math.floor(255-80*feature.properties.mag);
-      var b = Math.floor(255-80*feature.properties.mag);
-      color= "rgb("+r+" ,"+g+","+ b+")"
-      
-      var geojsonMarkerOptions = {
-        radius: 4*feature.properties.mag,
-        fillColor: color,
-        color: "black",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-      };
-      return L.circleMarker(latlng, geojsonMarkerOptions);
-    }
-  });
-
-
-  createMap(earthquakes);
-  
-}
-
-function createMap(earthquakes) {
-
-  var streetmap = L.tileLayer("https://api.mapbox.com/styles/v1/mapbox/outdoors-v10/tiles/256/{z}/{x}/{y}?" +
-    "access_token=pk.eyJ1Ijoia2pnMzEwIiwiYSI6ImNpdGRjbWhxdjAwNG0yb3A5b21jOXluZTUifQ." +
-    "T6YbdDixkOBWH_k9GbS8JQ");
-
-  var baseMaps = {
-    "Street Map": streetmap
-  };
-
-  var overlayMaps = {
-    Earthquakes: earthquakes
-  };
-
-  var myMap = L.map("map", {
-    center: [
-      37.09, -95.71
-    ],
-    zoom: 5,
-    layers: [streetmap, earthquakes]
-  });
-
-
-  function getColor(d) {
-      return d < 1 ? 'rgb(255,255,255)' :
-            d < 2  ? 'rgb(255,225,225)' :
-            d < 3  ? 'rgb(255,195,195)' :
-            d < 4  ? 'rgb(255,165,165)' :
-            d < 5  ? 'rgb(255,135,135)' :
-            d < 6  ? 'rgb(255,105,105)' :
-            d < 7  ? 'rgb(255,75,75)' :
-            d < 8  ? 'rgb(255,45,45)' :
-            d < 9  ? 'rgb(255,15,15)' :
-                        'rgb(255,0,0)';
-  }
-
-  var legend = L.control({position: 'bottomright'});
-
-  legend.onAdd = function (map) {
-  
-      var div = L.DomUtil.create('div', 'info legend'),
-      grades = [0, 1, 2, 3, 4, 5, 6, 7, 8],
-      labels = [];
-
-      div.innerHTML+='Magnitude<br><hr>'
-  
-      for (var i = 0; i < grades.length; i++) {
-          div.innerHTML +=
-              '<i style="background:' + getColor(grades[i] + 1) + '">&nbsp&nbsp&nbsp&nbsp</i> ' +
-              grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
-  }
-  
   return div;
-  };
-  
-  legend.addTo(myMap);
+};
 
-}
+legend.addTo(map);
+
+const tectonicPlatesUrl = "https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json";
+
+d3.json(tectonicPlatesUrl).then(data => {
+  L.geoJson(data, {
+    style: { color: "orange", weight: 2 }
+  }).addTo(map);
+});
